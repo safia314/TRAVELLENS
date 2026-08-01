@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 
-# 1. Save / Update Database
+#  Save / Update Database
 
 def save_hotel_to_db(data: dict):
     """Save or update hotel data"""
@@ -107,9 +107,8 @@ def merge_hotels(price_data, summary_data):
         })
 
     return hotels
-# ==========================================
 # 2. Add Dates
-# ==========================================
+
 def add_dates_to_url(url):
 
     """
@@ -132,7 +131,7 @@ def add_dates_to_url(url):
     )
 
 
-#responses
+# responses
 
 responses = []
 
@@ -196,7 +195,7 @@ if __name__ == "__main__":
             timeout=60000
         )
 
-        # انتظر حتى تكتمل جميع طلبات الـ API
+        
         page.wait_for_timeout(15000)
 
         if poll_data is None:
