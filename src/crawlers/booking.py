@@ -24,9 +24,9 @@ from src.app.database import SessionLocal
 from src.models.hotel import Hotel
 
 
-# ==========================================
-# 1. Save / Update Database Function
-# ==========================================
+
+# Save / Update Database Function
+
 def save_hotel_to_db(data: dict):
     """ Save or update hotel data using SQLAlchemy ORM """
     db = SessionLocal()
@@ -60,9 +60,9 @@ def add_dates_to_url(url):
         return f"{url}&checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1"
     return f"{url}?checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1"
 
-# ==========================================
-# 2. Extract Hotel Data (Scraper)
-# ==========================================
+
+# Extract Hotel Data (Scraper)
+
 def scrape_hotel_page(page, url):
     """ Extract hotel details and map them to the table structure """
     target_url = add_dates_to_url(url)
@@ -203,9 +203,9 @@ def scrape_hotel_page(page, url):
     
     return hotel_data
 
-# ==========================================
-# 3. Get Hotel Links
-# ==========================================
+
+# Get Hotel Links
+
 def get_hotel_links(page, search_url, max_links=20):
     """ Extract hotel links with page scrolling """
     print(f"[SEARCHING] Searching for hotels in: {search_url}")
@@ -238,9 +238,9 @@ def get_hotel_links(page, search_url, max_links=20):
 
     return hotel_links[:max_links]
 
-# ==========================================
-# 4. Main Execution
-# ==========================================
+
+# Main Execution
+
 if __name__ == "__main__":
     search_url = "https://www.booking.com/searchresults.html?ss=Jeddah"
     
