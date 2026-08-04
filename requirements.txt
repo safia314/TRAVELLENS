@@ -6,3 +6,5 @@ python-dotenv
 pydantic
 playwright
 beautifulsoup4
+requests
+jinja2

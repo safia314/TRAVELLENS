@@ -1,32 +1,18 @@
 import json
 import re
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
-
 from src.app.database import SessionLocal
 from src.models.hotel import Hotel
-
-
-import sys
-from pathlib import Path
 
 
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
-
-import json
-import re
-from datetime import datetime, timedelta
-# ...
-from src.app.database import SessionLocal
-from src.models.hotel import Hotel
-
-
-
 # Save / Update Database Function
-
 def save_hotel_to_db(data: dict):
     """ Save or update hotel data using SQLAlchemy ORM """
     db = SessionLocal()
@@ -51,6 +37,7 @@ def save_hotel_to_db(data: dict):
     finally:
         db.close()
 
+
 def add_dates_to_url(url):
     """ Add search dates to URL to force Booking.com to show prices """
     checkin = (datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d")
@@ -62,7 +49,6 @@ def add_dates_to_url(url):
 
 
 # Extract Hotel Data (Scraper)
-
 def scrape_hotel_page(page, url):
     """ Extract hotel details and map them to the table structure """
     target_url = add_dates_to_url(url)
@@ -205,7 +191,6 @@ def scrape_hotel_page(page, url):
 
 
 # Get Hotel Links
-
 def get_hotel_links(page, search_url, max_links=20):
     """ Extract hotel links with page scrolling """
     print(f"[SEARCHING] Searching for hotels in: {search_url}")
@@ -240,7 +225,6 @@ def get_hotel_links(page, search_url, max_links=20):
 
 
 # Main Execution
-
 if __name__ == "__main__":
     search_url = "https://www.booking.com/searchresults.html?ss=Jeddah"
     

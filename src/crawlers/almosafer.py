@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 
-#  Save / Update Database
+# Save / Update Database
 
 def save_hotel_to_db(data: dict):
     """Save or update hotel data"""
@@ -64,23 +64,35 @@ def merge_hotels(price_data, summary_data):
     currency = price_data.get("currency", "SAR")
 
     for result in price_data["searchResults"]:
-
         hotel_id = str(result["hotelId"])
 
         if hotel_id not in summaries:
             continue
+
         info = summaries[hotel_id]
 
         review = info.get("review") or {}
         facility_ids = info.get("facilityIds") or []
 
+        hotel_name = info["name"]["en"]
+
+        # slug 
+        slug = (
+            hotel_name.lower()
+            .replace("&", "and")
+            .replace("'", "")
+            .replace(",", "")
+            .replace("/", "-")
+            .replace(" ", "-")
+        )
+
         hotels.append({
 
-            "name": info["name"]["en"],
+            "name": hotel_name,
 
             "website": "almosafer",
 
-            "hotel_url": f"https://www.almosafer.com/en/hotel/details/{hotel_id}",
+            "hotel_url": f"https://sa.almosafer.com/en/hotel/details/atg/{slug}-{hotel_id}",
 
             "image_url": info.get("thumbnailUrl"),
 
@@ -107,7 +119,8 @@ def merge_hotels(price_data, summary_data):
         })
 
     return hotels
-# 2. Add Dates
+
+# Add Dates
 
 def add_dates_to_url(url):
 
@@ -138,6 +151,7 @@ responses = []
 poll_data = None
 summary_data = None
 
+hotel_request = None
 
 def capture_response(response):
     global poll_data
@@ -165,6 +179,23 @@ def capture_response(response):
 
     except Exception:
         pass
+
+def capture_request(request):
+    global hotel_request
+
+    if "/api/enigma/v6/packages" in request.url:
+
+        hotel_request = {
+            "url": request.url,
+            "method": request.method,
+            "headers": dict(request.headers),
+            "body": request.post_data
+        }
+
+        print("\n========== HOTEL REQUEST ==========")
+        print(request.post_data)
+        print("===================================\n")
+
 # Main
 
 if __name__ == "__main__":
@@ -177,7 +208,7 @@ if __name__ == "__main__":
 
     with sync_playwright() as p:
 
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=True)
 
         context = browser.new_context(
             viewport={"width": 1280, "height": 800}
@@ -186,6 +217,7 @@ if __name__ == "__main__":
         page = context.new_page()
 
         page.on("response", capture_response)
+        page.on("request", capture_request)
 
         print("[OPENING SEARCH PAGE]")
 
@@ -216,11 +248,14 @@ if __name__ == "__main__":
         print(f"\nFound {len(hotels)} hotels\n")
         for i, hotel in enumerate(hotels, start=1):
 
+        
+
             save_hotel_to_db(hotel)
 
             if i % 25 == 0:
                 print(f"Saved {i}/{len(hotels)} hotels...")
 
         print(f"\nFinished. Total hotels: {len(hotels)}")
+
 
         browser.close()

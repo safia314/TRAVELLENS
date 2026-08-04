@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TravelLens</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=3">
+</head>
+
+
+<body>
+    <header class="header">
+        <div class="header-content">
+
+            <h1>TravelLens</h1>
+            <p> Find the best hotel deals for your next trip to Jeddah from Booking.com and Almosafer.com ! </p>
+
+            <div class="trip-info">
+                <span>📍 Jeddah</span>
+                <span>📅 14 – 16 August 2026</span>
+            </div>
+
+        </div>
+    </header>
+
+    <main>
+        <section class="section-title">
+            <h2>Available Hotels</h2>
+        </section>
+
+        <section id="hotels" class="hotel-grid">
+            <!-- JS inserts hotel cards here -->
+        </section>
+    </main>
+
+    <button id="chatToggle" class="chat-toggle"> 🤖 </button>
+ <section class="chat-container" id="chatWindow">
+    
+    <div class="chat-header" id="chatHeader">
+    <span> 🤖 TravelLens AI Assistant </span>
+    </div>
+
+    <div class="chat-body">
+
+        <p class="chat-subtitle"> Ask anything about the available hotels </p>
+        <textarea id="prompt" placeholder="Example: Which hotel has the highest rating?"></textarea>
+        <button id="chat-btn">Ask AI</button>
+        <div id="response"></div>
+        
+    </div>
+ </section>
+
+    <footer><p> TravelLens </p></footer>
+    <script src="/static/js/app.js?v=3"></script>
+</body>
+</html>

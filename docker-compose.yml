@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: travellens-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: travellens
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    container_name: travellens-app
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_HOST: mysql
+      DB_NAME: travellens
+
+volumes:
+  mysql_data:
