@@ -1,24 +1,32 @@
+import argparse
 import json
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, date
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode, urlunparse, parse_qsl
+
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
+
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+
 from src.app.database import SessionLocal
 from src.models.hotel import Hotel
 
 
-sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
-
-# Save / Update Database Function
+# --------------------------------------------------------------------------
+# Database
+# --------------------------------------------------------------------------
 def save_hotel_to_db(data: dict):
-    """ Save or update hotel data using SQLAlchemy ORM """
+    """Save or update hotel data using SQLAlchemy ORM."""
     db = SessionLocal()
     try:
         existing_hotel = db.query(Hotel).filter(
-            (Hotel.name == data['name']) | (Hotel.hotel_url == data['hotel_url'])
+            Hotel.name == data["name"],
+            Hotel.website == data["website"],
+            Hotel.check_in == data["check_in"],
+            Hotel.check_out == data["check_out"]
         ).first()
 
         if existing_hotel:
@@ -38,31 +46,61 @@ def save_hotel_to_db(data: dict):
         db.close()
 
 
-def add_dates_to_url(url):
-    """ Add search dates to URL to force Booking.com to show prices """
-    checkin = (datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d")
-    checkout = (datetime.now() + timedelta(days=16)).strftime("%Y-%m-%d")
-    
-    if "?" in url:
-        return f"{url}&checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1"
-    return f"{url}?checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1"
+# --------------------------------------------------------------------------
+# URL helpers
+# --------------------------------------------------------------------------
+def add_dates_to_url(url: str, checkin: str, checkout: str, adults: int, rooms: int) -> str:
+    """
+    Attach/override the search parameters (checkin, checkout, adults, rooms)
+    on a hotel/search URL so Booking.com returns priced results for the
+    dates the caller asked for, instead of a hardcoded 14/16-day offset.
+    """
+    parsed = urlparse(url)
+    query = dict(parse_qsl(parsed.query))
+    query.update({
+        "checkin": checkin,
+        "checkout": checkout,
+        "group_adults": str(adults),
+        "no_rooms": str(rooms),
+    })
+    new_query = urlencode(query)
+    return urlunparse(parsed._replace(query=new_query))
 
 
-# Extract Hotel Data (Scraper)
-def scrape_hotel_page(page, url):
-    """ Extract hotel details and map them to the table structure """
-    target_url = add_dates_to_url(url)
+def validate_date_range(checkin: str, checkout: str):
+    """Parse and sanity-check the dates the user supplied. Raises ValueError on bad input."""
+    fmt = "%Y-%m-%d"
+    try:
+        checkin_d = datetime.strptime(checkin, fmt).date()
+        checkout_d = datetime.strptime(checkout, fmt).date()
+    except ValueError:
+        raise ValueError("Dates must be in YYYY-MM-DD format, e.g. 2026-08-14")
+
+    if checkin_d < date.today():
+        raise ValueError(f"checkin ({checkin}) is in the past")
+    if checkout_d <= checkin_d:
+        raise ValueError(f"checkout ({checkout}) must be after checkin ({checkin})")
+
+    return checkin, checkout
+
+
+# --------------------------------------------------------------------------
+# Hotel page scraper
+# --------------------------------------------------------------------------
+def scrape_hotel_page(page, url: str, city: str, checkin: str, checkout: str, adults: int, rooms: int) -> dict:
+    """Extract hotel details and map them to the table structure."""
+    target_url = add_dates_to_url(url, checkin, checkout, adults, rooms)
     print(f"\n[FETCHING] Scraping hotel from: {url}")
-    
+
     page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
-    
+
     for offset in [500, 1200, 2000]:
         page.evaluate(f"window.scrollTo(0, {offset})")
         page.wait_for_timeout(800)
 
     html = page.content()
     soup = BeautifulSoup(html, "html.parser")
-    
+
     json_ld_script = soup.find("script", type="application/ld+json")
     ld_data = {}
     if json_ld_script:
@@ -97,7 +135,7 @@ def scrape_hotel_page(page, url):
         '.important_facility_text, '
         'div.k3_dept_facilities_group li'
     )
-    
+
     for item in amenity_nodes:
         text = item.get_text(strip=True)
         if text and 2 < len(text) < 45 and text not in amenities_list:
@@ -113,7 +151,7 @@ def scrape_hotel_page(page, url):
                 }
             """)
             for a in js_amenities:
-                clean_text = a.split('\n')[0]
+                clean_text = a.split("\n")[0]
                 if clean_text not in amenities_list:
                     amenities_list.append(clean_text)
         except Exception:
@@ -129,44 +167,44 @@ def scrape_hotel_page(page, url):
 
     price_selectors = [
         '[data-testid="price-and-discounted-price"]',
-        '.prco-valign-middle-helper',
-        '.bui-price-display__value',
-        '.f6431b446d',
-        'span[class*="price"]'
+        ".prco-valign-middle-helper",
+        ".bui-price-display__value",
+        ".f6431b446d",
+        'span[class*="price"]',
     ]
-    
+
     for sel in price_selectors:
         price_elem = soup.select_one(sel)
         if price_elem:
             price_text = price_elem.get_text(strip=True)
-            numbers = re.findall(r'[\d\.\,]+', price_text)
+            numbers = re.findall(r"[\d\.\,]+", price_text)
             if numbers:
-                parsed_price = float(numbers[0].replace(',', ''))
+                parsed_price = float(numbers[0].replace(",", ""))
                 if parsed_price > 50:
                     price = parsed_price
                     break
 
     orig_selectors = [
-        '.bui-price-display__original',
-        '.prco-inline-block-maker-helper',
-        'del',
-        '[data-testid="item-original-price"]'
+        ".bui-price-display__original",
+        ".prco-inline-block-maker-helper",
+        "del",
+        '[data-testid="item-original-price"]',
     ]
     for sel in orig_selectors:
         orig_elem = soup.select_one(sel)
         if orig_elem:
             orig_text = orig_elem.get_text(strip=True)
-            numbers = re.findall(r'[\d\.\,]+', orig_text)
+            numbers = re.findall(r"[\d\.\,]+", orig_text)
             if numbers:
-                original_price = float(numbers[0].replace(',', ''))
+                original_price = float(numbers[0].replace(",", ""))
                 break
 
     tax_elem = soup.select_one('[data-testid="taxes-and-charges"], .prd-taxes-and-charges-under-price')
     if tax_elem:
         tax_text = tax_elem.get_text(strip=True)
-        tax_numbers = re.findall(r'[\d\.\,]+', tax_text)
+        tax_numbers = re.findall(r"[\d\.\,]+", tax_text)
         if tax_numbers:
-            tax_amount = float(tax_numbers[0].replace(',', ''))
+            tax_amount = float(tax_numbers[0].replace(",", ""))
 
     if original_price and price and original_price > price:
         discount_percentage = round(((original_price - price) / original_price) * 100, 2)
@@ -174,6 +212,10 @@ def scrape_hotel_page(page, url):
     hotel_data = {
         "name": hotel_name,
         "website": "booking.com",
+        "city": city,
+        "check_in": checkin,
+        "check_out": checkout,
+        "adults": adults,
         "hotel_url": url,
         "image_url": image_url,
         "currency": currency,
@@ -184,65 +226,336 @@ def scrape_hotel_page(page, url):
         "price": price,
         "is_tax_included": True,
         "tax_amount": tax_amount,
-        "amenities": amenities_str
+        "amenities": amenities_str,
     }
-    
+
     return hotel_data
 
 
-# Get Hotel Links
-def get_hotel_links(page, search_url, max_links=20):
-    """ Extract hotel links with page scrolling """
+# --------------------------------------------------------------------------
+# Search results -> hotel links
+# --------------------------------------------------------------------------
+def build_search_url(city: str, checkin: str, checkout: str, adults: int, rooms: int) -> str:
+    params = {
+        "ss": city,
+        "checkin": checkin,
+        "checkout": checkout,
+        "group_adults": adults,
+        "no_rooms": rooms,
+    }
+    return "https://www.booking.com/searchresults.html?" + urlencode(params)
+
+
+def dismiss_cookie_banner(page):
+    """Booking.com's GDPR/cookie banner sits on top of the results and can
+    block clicks/rendering until it's dismissed."""
+    selectors = [
+        '#onetrust-accept-btn-handler',
+        'button[data-testid="cookie-banner-accept"]',
+        'button[aria-label*="Accept"]',
+        'button[aria-label*="accept"]',
+    ]
+    for sel in selectors:
+        try:
+            btn = page.locator(sel).first
+            if btn.count() > 0 and btn.is_visible(timeout=2000):
+                btn.click(timeout=2000)
+                print(f"[DEBUG] Dismissed cookie banner via {sel}")
+                page.wait_for_timeout(500)
+                return
+        except Exception:
+            continue
+
+
+def dismiss_genius_modal(page):
+    """Booking.com shows a 'Sign in, save money' Genius modal over search
+    results on many sessions. It doesn't block DOM queries the way a hard
+    interstitial would, but closing it keeps screenshots/HTML readable and
+    avoids it intercepting later clicks."""
+    selectors = [
+        'button[aria-label="Dismiss sign-in info."]',
+        'button[aria-label="Close"]',
+        '[data-testid="modal-close-button"]',
+    ]
+    for sel in selectors:
+        try:
+            btn = page.locator(sel).first
+            if btn.count() > 0 and btn.is_visible(timeout=2000):
+                btn.click(timeout=2000)
+                print(f"[DEBUG] Dismissed Genius modal via {sel}")
+                page.wait_for_timeout(300)
+                return
+        except Exception:
+            continue
+
+
+def dump_debug_artifacts(page, tag: str = "debug"):
+    """Save a screenshot + HTML snapshot so a 0-results run can be inspected
+    instead of failing silently. Written to /tmp so it works regardless of
+    container filesystem layout."""
+    try:
+        out_dir = Path("/tmp/booking_debug")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        html_path = out_dir / f"{tag}_{stamp}.html"
+        png_path = out_dir / f"{tag}_{stamp}.png"
+        html_path.write_text(page.content(), encoding="utf-8")
+        page.screenshot(path=str(png_path), full_page=True)
+        print(f"[DEBUG] Saved debug artifacts: {html_path}, {png_path}")
+    except Exception as e:
+        print(f"[DEBUG] Could not save debug artifacts: {e}")
+
+
+def get_hotel_links(page, search_url: str, max_links: int = 20) -> list:
     print(f"[SEARCHING] Searching for hotels in: {search_url}")
+
     page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
-    page.wait_for_timeout(4000)
+    dismiss_cookie_banner(page)
+    dismiss_genius_modal(page)
+
+    print(f"[DEBUG] Current URL: {page.url}")
+    print(f"[DEBUG] Page title: {page.title()}")
+
+    # Wait explicitly for a property card to show up rather than a fixed
+    # sleep — if none ever appear, we know within 20s instead of guessing.
+    try:
+        page.wait_for_selector('[data-testid="property-card"]', timeout=20000)
+    except Exception:
+        print("[WARN] No property cards appeared within 20s — "
+              "Booking.com may be showing a captcha, a 'no results' page, "
+              "or a layout the current selectors don't match.")
+        dump_debug_artifacts(page, tag="no_cards")
+
+    # Scroll to allow any lazily-loaded results to render
+    for _ in range(5):
+        page.mouse.wheel(0, 1500)
+        page.wait_for_timeout(1500)
+
+    cards = page.locator('[data-testid="property-card"]')
+    print(f"[DEBUG] Property cards found: {cards.count()}")
+
+    if cards.count() == 0:
+        dump_debug_artifacts(page, tag="zero_cards")
 
     hotel_links = []
 
-    for _ in range(5):
-        page.evaluate("window.scrollBy(0, 1500)")
-        page.wait_for_timeout(1500)
+    for i in range(min(cards.count(), max_links)):
+        card = cards.nth(i)
 
-        html = page.content()
-        soup = BeautifulSoup(html, "html.parser")
+        link = card.locator('a[data-testid="title-link"]').first
+        if link.count() == 0:
+            link = card.locator('a[href*="/hotel/"]').first
+        if link.count() == 0:
+            continue
 
-        for link in soup.select('a[href*="/hotel/"]'):
-            href = link.get("href")
-            if href:
-                if href.startswith("/"):
-                    href = "https://www.booking.com" + href
-                
-                parsed = urlparse(href)
-                clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-                
-                if clean_url not in hotel_links and "/hotel/" in clean_url:
-                    hotel_links.append(clean_url)
+        href = link.get_attribute("href")
+        if not href:
+            continue
 
-        if len(hotel_links) >= max_links:
-            break
+        if href.startswith("/"):
+            href = "https://www.booking.com" + href
 
+        parsed = urlparse(href)
+        clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+
+        if clean_url.endswith("/hotel/index.html"):
+            continue
+
+        if clean_url not in hotel_links and "/hotel/" in clean_url:
+            hotel_links.append(clean_url)
+
+    print(f"[DEBUG] Valid hotel links: {len(hotel_links)}")
     return hotel_links[:max_links]
 
 
-# Main Execution
-if __name__ == "__main__":
-    search_url = "https://www.booking.com/searchresults.html?ss=Jeddah"
-    
+# --------------------------------------------------------------------------
+# CLI / main
+# --------------------------------------------------------------------------
+def parse_args():
+    parser = argparse.ArgumentParser(description="Scrape Booking.com hotel listings for chosen dates.")
+    parser.add_argument("--city", default="Jeddah", help="City / search term (default: Jeddah)")
+    parser.add_argument("--checkin", required=True, help="Check-in date, YYYY-MM-DD")
+    parser.add_argument("--checkout", required=True, help="Check-out date, YYYY-MM-DD")
+    parser.add_argument("--adults", type=int, default=2, help="Number of adults (default: 2)")
+    parser.add_argument("--rooms", type=int, default=1, help="Number of rooms (default: 1)")
+    parser.add_argument("--max-links", type=int, default=20, help="Max hotels to scrape (default: 20)")
+    parser.add_argument("--headless", action="store_true", default=True, help="Run browser headless (default: True)")
+    parser.add_argument("--no-headless", dest="headless", action="store_false", help="Run with a visible browser window")
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+
+    try:
+        checkin, checkout = validate_date_range(args.checkin, args.checkout)
+    except ValueError as e:
+        print(f"[ERROR] {e}")
+        sys.exit(1)
+
+    search_url = build_search_url(args.city, checkin, checkout, args.adults, args.rooms)
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        context = browser.new_context(viewport={"width": 1280, "height": 800})
+        browser = p.chromium.launch(headless=args.headless)
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 800},
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+            locale="en-US",
+            extra_http_headers={
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        )
+        # Remove the most obvious automation flag. This is standard hygiene
+        # for reducing false-positive bot flags on ordinary requests — not a
+        # substitute for respecting a site's actual bot-detection/ToS.
+        context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+        )
         page = context.new_page()
 
-        links = get_hotel_links(page, search_url, max_links=20)
-        print(f"[FOUND] Found {len(links)} hotels.")
+        try:
+            links = get_hotel_links(page, search_url, max_links=args.max_links)
+            print(f"[FOUND] Found {len(links)} hotels.")
 
-        for index, link in enumerate(links, 1):
-            print(f"--- Processing hotel ({index}/{len(links)}) ---")
-            try:
-                data = scrape_hotel_page(page, link)
-                save_hotel_to_db(data)
-            except Exception as e:
-                print(f"[ERROR] Failed to scrape hotel {link}: {e}")
+            for index, link in enumerate(links, 1):
+                print(f"--- Processing hotel ({index}/{len(links)}) ---")
+                try:
+                    data = scrape_hotel_page(
+                                                        page,
+                                                        link,
+                                                        args.city,
+                                                        checkin,
+                                                        checkout,
+                                                        args.adults,
+                                                        args.rooms
+                                                    )
+                    save_hotel_to_db(data)
+                except Exception as e:
+                    print(f"[ERROR] Failed to scrape hotel {link}: {e}")
+        finally:
+            browser.close()
 
-        browser.close()
-        print("\n[FINISHED] Process completed successfully!")
+    print("\n[FINISHED] Process completed successfully!")
+
+def run_booking(
+    city: str,
+    checkin: date,
+    checkout: date,
+    adults: int = 2,
+    rooms: int = 1,
+    max_links: int = 20,
+    headless: bool = True
+):
+
+    """
+    Run Booking.com crawler from the service/API layer.
+    Returns the number of hotels found.
+    """
+
+    # Validate dates
+    checkin, checkout = validate_date_range(
+        checkin,
+        checkout
+    )
+
+    # Build Booking search URL
+    search_url = build_search_url(
+        city,
+        checkin,
+        checkout,
+        adults,
+        rooms
+    )
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=headless
+        )
+
+        context = browser.new_context(
+            viewport={
+                "width": 1280,
+                "height": 800
+            },
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 "
+                "(KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            locale="en-US",
+            extra_http_headers={
+                "Accept-Language": "en-US,en;q=0.9"
+            },
+        )
+
+        context.add_init_script(
+            "Object.defineProperty("
+            "navigator, 'webdriver', "
+            "{get: () => undefined});"
+        )
+
+        page = context.new_page()
+
+        try:
+            print("[SEARCHING BOOKING]")
+            print(f"[URL] {search_url}")
+
+            links = get_hotel_links(
+                page,
+                search_url,
+                max_links=max_links
+            )
+
+            print(
+                f"[FOUND] Found {len(links)} hotels."
+            )
+
+            saved_count = 0
+
+            for index, link in enumerate(
+                links,
+                1
+            ):
+                print(
+                    f"--- Processing hotel "
+                    f"({index}/{len(links)}) ---"
+                )
+
+                try:
+                    data = scrape_hotel_page(
+                        page,
+                        link,
+                        city,
+                        checkin,
+                        checkout,
+                        adults,
+                        rooms
+                    )
+
+                    save_hotel_to_db(data)
+
+                    saved_count += 1
+
+                except Exception as e:
+                    print(
+                        f"[ERROR] Failed to scrape "
+                        f"hotel {link}: {e}"
+                    )
+
+            print(
+                f"\n[FINISHED] Booking crawler completed. "
+                f"Hotels saved: {saved_count}"
+            )
+
+            return saved_count
+
+        finally:
+            browser.close()
+    
+    
+if __name__ == "__main__":
+    main()

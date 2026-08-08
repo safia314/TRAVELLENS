@@ -5,11 +5,14 @@ services:
     image: mysql:8.0
     container_name: travellens-db
     restart: always
+
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: travellens
+
     ports:
       - "3307:3306"
+
     volumes:
       - mysql_data:/var/lib/mysql
 
@@ -36,5 +39,9 @@ services:
       DB_HOST: mysql
       DB_NAME: travellens
 
+    volumes:
+      - chroma_data:/app/chroma_db
+
 volumes:
   mysql_data:
+  chroma_data:

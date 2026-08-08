@@ -1,5 +1,8 @@
+from datetime import date
 from typing import List, Optional
+
 from sqlalchemy.orm import Session
+
 from src.models.hotel import Hotel
 from src.schemas.hotel import HotelCreate, HotelUpdate
 
@@ -17,21 +20,48 @@ class HotelService:
 
     @staticmethod
     def search_hotels(
-        db: Session, 
-        name: Optional[str] = None, 
+        db: Session,
+        name: Optional[str] = None,
+        min_rating: Optional[float] = None,
         max_price: Optional[float] = None,
-        min_rating: Optional[float] = None
+        city: Optional[str] = None,
+        check_in: Optional[date] = None,
+        check_out: Optional[date] = None
     ) -> List[Hotel]:
         """Search and filter hotels"""
+
         query = db.query(Hotel)
-        
+
         if name:
-            query = query.filter(Hotel.name.ilike(f"%{name}%"))
-        if max_price is not None:
-            query = query.filter(Hotel.price <= max_price)
+            query = query.filter(
+                Hotel.name.ilike(f"%{name}%")
+            )
+
         if min_rating is not None:
-            query = query.filter(Hotel.rating >= min_rating)
-            
+            query = query.filter(
+                Hotel.rating >= min_rating
+            )
+
+        if max_price is not None:
+            query = query.filter(
+                Hotel.price <= max_price
+            )
+
+        if city:
+            query = query.filter(
+                Hotel.city.ilike(f"%{city}%")
+            )
+
+        if check_in is not None:
+            query = query.filter(
+                Hotel.check_in >= check_in
+            )
+
+        if check_out is not None:
+            query = query.filter(
+                Hotel.check_out <= check_out
+            )
+
         return query.all()
 
     @staticmethod

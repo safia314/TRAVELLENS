@@ -22,3 +22,9 @@ CREATE TABLE IF NOT EXISTS hotels (
 
 SHOW TABLES;
 DESCRIBE hotels;
+
+ALTER TABLE hotels
+    ADD COLUMN city VARCHAR(100),
+    ADD COLUMN check_in DATE,
+    ADD COLUMN check_out DATE,
+    ADD COLUMN adults INT;

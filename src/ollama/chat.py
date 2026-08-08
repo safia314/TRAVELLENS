@@ -3,8 +3,8 @@ from typing import List
 from sqlalchemy.orm import Session
 from src.models.hotel import Hotel
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "llama3"  # يمكنك تغييره للنموذج المثبت لديك (مثل qwen2 أو mistral)
+OLLAMA_URL = "http://host.docker.internal:11434/api/generate"
+MODEL_NAME = "llama3"  
 
 def build_context_from_db(db: Session) -> str:
     """ Fetch hotel data and format it into a context string for Ollama """
