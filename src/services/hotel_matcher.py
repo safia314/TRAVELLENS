@@ -1,16 +1,14 @@
-
-
 import re
 import unicodedata
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from sqlalchemy.orm import Session
 
 from src.models.hotel import Hotel
 
-# Below this similarity score, two hotel names are not considered the same
+# Below this blended score, two hotel names are not considered the same
 # hotel at all.
 MATCH_THRESHOLD = 0.70
 LOW_CONFIDENCE_THRESHOLD = 0.80
@@ -65,7 +63,7 @@ def _normalize_name(name: str) -> str:
     return " ".join(tokens)
 
 
-def _meaningful_tokens(name: str) -> set[str]:
+def _meaningful_tokens(name: str) -> Set[str]:
     normalized = _normalize_name(name)
 
     return {
@@ -76,11 +74,19 @@ def _meaningful_tokens(name: str) -> set[str]:
     }
 
 
+def _token_jaccard(tokens_a: Set[str], tokens_b: Set[str]) -> float:
+    if not tokens_a or not tokens_b:
+        return 0.0
+    intersection = tokens_a & tokens_b
+    union = tokens_a | tokens_b
+    return len(intersection) / len(union) if union else 0.0
+
+
 def _similarity(name_a: str, name_b: str) -> float:
     normalized_a = _normalize_name(name_a)
     normalized_b = _normalize_name(name_b)
 
-    score = SequenceMatcher(
+    seq_ratio = SequenceMatcher(
         None,
         normalized_a,
         normalized_b
@@ -89,15 +95,23 @@ def _similarity(name_a: str, name_b: str) -> float:
     tokens_a = _meaningful_tokens(name_a)
     tokens_b = _meaningful_tokens(name_b)
 
-    # If both hotels have meaningful identifying words,
-    # require at least one important word to overlap.
+    # Character-ratio alone is fooled by a long shared brand/prefix even
+    # when the distinguishing words (branch, district, qualifier) don't
+    # overlap at all — e.g. "Royal Palace Hotel - Jaber" vs "Royal Palace
+    # Hotel - Al Olaya" score ~0.72 on ratio alone despite being different
+    # branches. Blending in token Jaccard (how MUCH of the word set is
+    # shared, not just whether any word is shared) penalizes that case
+    # while still tolerating real-world noise like typos or transliteration
+    # ("Al Malaz" vs "AI Malaz") that mostly hits ratio, not token identity.
     if tokens_a and tokens_b:
-        shared_tokens = tokens_a & tokens_b
-
-        if not shared_tokens:
+        jaccard = _token_jaccard(tokens_a, tokens_b)
+        if jaccard == 0.0:
+            # No meaningful words in common at all — not the same hotel,
+            # regardless of how similar the raw strings look.
             return 0.0
+        return (seq_ratio + jaccard) / 2
 
-    return score
+    return seq_ratio
 
 
 @dataclass
