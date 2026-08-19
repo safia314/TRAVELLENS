@@ -52,9 +52,13 @@ def create_embedding(text: str):
 
     return response.json()["embeddings"][0]
 
+def index_hotels(db: Session, limit: int = None):
+    query = db.query(Hotel)
 
-def index_hotels(db: Session, limit: int = 10):
-    hotels = db.query(Hotel).limit(limit).all()
+    if limit is not None:
+        query = query.limit(limit)
+
+    hotels = query.all()
 
     collection = get_chroma_collection()
 
@@ -79,14 +83,56 @@ def index_hotels(db: Session, limit: int = 10):
     return len(hotels)
 
 
-def search_hotels(query: str, n_results: int = 5):
+def search_hotels(
+    query: str,
+    n_results: int = 5,
+    distance_threshold: float = 1.0
+):
     collection = get_chroma_collection()
+
+    print("Chroma count:", collection.count())
+    print("Chroma path:", CHROMA_PATH)
 
     query_embedding = create_embedding(query)
 
     results = collection.query(
         query_embeddings=[query_embedding],
-        n_results=n_results
+        n_results=n_results,
+        include=["documents", "metadatas", "distances"]
     )
 
-    return results
+    distances = results.get("distances", [[]])[0]
+    print("========== CHROMA DEBUG ==========")
+    print("Query:", query)
+    print("Distances:", distances)
+    print("===================================")
+
+    if not distances:
+        return {
+            "documents": [[]],
+            "metadatas": [[]],
+            "distances": [[]]
+        }
+
+    relevant_documents = []
+    relevant_metadatas = []
+    relevant_distances = []
+
+    documents = results.get("documents", [[]])[0]
+    metadatas = results.get("metadatas", [[]])[0]
+
+    for document, metadata, distance in zip(
+        documents,
+        metadatas,
+        distances
+    ):
+        if distance <= distance_threshold:
+            relevant_documents.append(document)
+            relevant_metadatas.append(metadata)
+            relevant_distances.append(distance)
+
+    return {
+        "documents": [relevant_documents],
+        "metadatas": [relevant_metadatas],
+        "distances": [relevant_distances]
+    }

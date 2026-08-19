@@ -81,15 +81,18 @@ def validate_date_range(checkin: str, checkout: str):
     if checkout_d <= checkin_d:
         raise ValueError(f"checkout ({checkout}) must be after checkin ({checkin})")
 
-    return checkin, checkout
+    if checkout_d <= checkin_d:
+        raise ValueError(f"checkout ({checkout}) must be after checkin ({checkin})")
+
+    return checkin_d, checkout_d
 
 
 # --------------------------------------------------------------------------
 # Hotel page scraper
 # --------------------------------------------------------------------------
-def scrape_hotel_page(page, url: str, city: str, checkin: str, checkout: str, adults: int, rooms: int) -> dict:
+def scrape_hotel_page(page, url: str, city: str, checkin: date, checkout: date, adults: int, rooms: int) -> dict:
     """Extract hotel details and map them to the table structure."""
-    target_url = add_dates_to_url(url, checkin, checkout, adults, rooms)
+    target_url = add_dates_to_url(url, checkin.isoformat(), checkout.isoformat(), adults, rooms)
     print(f"\n[FETCHING] Scraping hotel from: {url}")
 
     page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
@@ -212,12 +215,12 @@ def scrape_hotel_page(page, url: str, city: str, checkin: str, checkout: str, ad
     hotel_data = {
         "name": hotel_name,
         "website": "booking.com",
+        "hotel_url": url,
+        "image_url": image_url,
         "city": city,
         "check_in": checkin,
         "check_out": checkout,
         "adults": adults,
-        "hotel_url": url,
-        "image_url": image_url,
         "currency": currency,
         "rating": float(rating) if rating else None,
         "reviews": int(reviews) if reviews else None,
@@ -388,15 +391,56 @@ def main():
     args = parse_args()
 
     try:
-        checkin, checkout = validate_date_range(args.checkin, args.checkout)
+        checkin_d, checkout_d = validate_date_range(args.checkin, args.checkout)
     except ValueError as e:
         print(f"[ERROR] {e}")
         sys.exit(1)
 
-    search_url = build_search_url(args.city, checkin, checkout, args.adults, args.rooms)
+    count = _run_crawl(
+        city=args.city,
+        checkin_d=checkin_d,
+        checkout_d=checkout_d,
+        adults=args.adults,
+        rooms=args.rooms,
+        max_links=args.max_links,
+        headless=args.headless,
+    )
+
+    print(f"\n[FINISHED] Process completed successfully! Saved {count} hotels.")
+
+
+def run_booking(
+    city: str,
+    checkin: str,
+    checkout: str,
+    adults: int = 2,
+    rooms: int = 1,
+    max_links: int = 20,
+    headless: bool = True
+) -> int:
+    """
+    Run Booking.com crawler from the API/service layer.
+    Returns the number of hotels saved.
+    """
+    checkin_d, checkout_d = validate_date_range(checkin, checkout)
+    return _run_crawl(
+        city=city,
+        checkin_d=checkin_d,
+        checkout_d=checkout_d,
+        adults=adults,
+        rooms=rooms,
+        max_links=max_links,
+        headless=headless,
+    )
+
+
+def _run_crawl(city: str, checkin_d: date, checkout_d: date, adults: int, rooms: int, max_links: int, headless: bool) -> int:
+    """Shared crawl logic used by both the CLI (main) and run_booking()."""
+    search_url = build_search_url(city, checkin_d.isoformat(), checkout_d.isoformat(), adults, rooms)
+    saved_count = 0
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=args.headless)
+        browser = p.chromium.launch(headless=headless)
         context = browser.new_context(
             viewport={"width": 1280, "height": 800},
             user_agent=(
@@ -417,145 +461,22 @@ def main():
         page = context.new_page()
 
         try:
-            links = get_hotel_links(page, search_url, max_links=args.max_links)
+            links = get_hotel_links(page, search_url, max_links=max_links)
             print(f"[FOUND] Found {len(links)} hotels.")
 
             for index, link in enumerate(links, 1):
                 print(f"--- Processing hotel ({index}/{len(links)}) ---")
                 try:
-                    data = scrape_hotel_page(
-                                                        page,
-                                                        link,
-                                                        args.city,
-                                                        checkin,
-                                                        checkout,
-                                                        args.adults,
-                                                        args.rooms
-                                                    )
+                    data = scrape_hotel_page(page, link, city, checkin_d, checkout_d, adults, rooms)
                     save_hotel_to_db(data)
+                    saved_count += 1
                 except Exception as e:
                     print(f"[ERROR] Failed to scrape hotel {link}: {e}")
         finally:
             browser.close()
 
-    print("\n[FINISHED] Process completed successfully!")
+    return saved_count
 
-def run_booking(
-    city: str,
-    checkin: date,
-    checkout: date,
-    adults: int = 2,
-    rooms: int = 1,
-    max_links: int = 20,
-    headless: bool = True
-):
 
-    """
-    Run Booking.com crawler from the service/API layer.
-    Returns the number of hotels found.
-    """
-
-    # Validate dates
-    checkin, checkout = validate_date_range(
-        checkin,
-        checkout
-    )
-
-    # Build Booking search URL
-    search_url = build_search_url(
-        city,
-        checkin,
-        checkout,
-        adults,
-        rooms
-    )
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=headless
-        )
-
-        context = browser.new_context(
-            viewport={
-                "width": 1280,
-                "height": 800
-            },
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 "
-                "(KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
-            locale="en-US",
-            extra_http_headers={
-                "Accept-Language": "en-US,en;q=0.9"
-            },
-        )
-
-        context.add_init_script(
-            "Object.defineProperty("
-            "navigator, 'webdriver', "
-            "{get: () => undefined});"
-        )
-
-        page = context.new_page()
-
-        try:
-            print("[SEARCHING BOOKING]")
-            print(f"[URL] {search_url}")
-
-            links = get_hotel_links(
-                page,
-                search_url,
-                max_links=max_links
-            )
-
-            print(
-                f"[FOUND] Found {len(links)} hotels."
-            )
-
-            saved_count = 0
-
-            for index, link in enumerate(
-                links,
-                1
-            ):
-                print(
-                    f"--- Processing hotel "
-                    f"({index}/{len(links)}) ---"
-                )
-
-                try:
-                    data = scrape_hotel_page(
-                        page,
-                        link,
-                        city,
-                        checkin,
-                        checkout,
-                        adults,
-                        rooms
-                    )
-
-                    save_hotel_to_db(data)
-
-                    saved_count += 1
-
-                except Exception as e:
-                    print(
-                        f"[ERROR] Failed to scrape "
-                        f"hotel {link}: {e}"
-                    )
-
-            print(
-                f"\n[FINISHED] Booking crawler completed. "
-                f"Hotels saved: {saved_count}"
-            )
-
-            return saved_count
-
-        finally:
-            browser.close()
-    
-    
 if __name__ == "__main__":
     main()

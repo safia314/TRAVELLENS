@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -10,7 +9,7 @@ from src.services.hotel_service import HotelService
 from src.schemas.hotel import HotelResponse
 from src.ollama.chat import ask_ollama
 from src.services.crawler_service import crawl_booking, crawl_almosafer
-
+from src.vector_store import index_hotels
 
 # API
 
@@ -39,14 +38,27 @@ class BookingCrawlRequest(BaseModel):
 
 class AlmosaferCrawlRequest(BaseModel):
     city: str
-    place_id: str
     checkin: str
     checkout: str
+    place_id: Optional[str] = None  # resolved automatically from city if omitted
     adults: int = 2
     wait_ms: int = 30000
     retries: int = 2
     headless: bool = True
 
+# Get all hotels
+@router.get("", response_model=List[HotelResponse])
+def get_hotels(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """Get all hotels with pagination."""
+    return HotelService.get_all_hotels(
+        db,
+        skip=skip,
+        limit=limit
+    )
 
 # Search hotels
 
@@ -113,14 +125,15 @@ def crawl_almosafer_hotels(
 ):
     """
     Run Almosafer crawler and save hotels to database.
+    place_id is optional — if omitted, it's resolved automatically from city.
     """
 
     try:
         count = crawl_almosafer(
             city=request.city,
-            place_id=request.place_id,
             checkin=request.checkin,
             checkout=request.checkout,
+            place_id=request.place_id,
             adults=request.adults,
             wait_ms=request.wait_ms,
             retries=request.retries,
@@ -139,20 +152,28 @@ def crawl_almosafer_hotels(
             detail=str(e)
         )
 
+@router.post("/index")
+def index_hotel_data(
+    db: Session = Depends(get_db)
+):
+    """Index hotel data from MySQL into ChromaDB."""
 
+    count = index_hotels(db, limit=100)
+
+    return {
+        "indexed_hotels": count,
+        "message": "Hotels indexed successfully into ChromaDB"
+    }
 # AI Chat
 
 @router.post("/chat")
 def chat_with_ai(
-    request: ChatRequest,
-    db: Session = Depends(get_db)
+    request: ChatRequest
 ):
     """Chat with TravelLens AI Assistant about hotels."""
 
     ai_response = ask_ollama(
-        request.prompt,
-        db
-    )
+        request.prompt)
 
     return {
         "response": ai_response
@@ -168,7 +189,7 @@ def get_hotel(
     """Get hotel by ID."""
 
     hotel = HotelService.get_hotel_by_id(
-        db,
+
         hotel_id
     )
 

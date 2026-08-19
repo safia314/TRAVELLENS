@@ -10,6 +10,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from src.app.database import SessionLocal
 from src.models.hotel import Hotel
+from src.crawlers.almosafer_places import get_place_id
 
 
 # --------------------------------------------------------------------------
@@ -129,7 +130,8 @@ def build_search_url(city: str, place_id: str, checkin: date, checkout: date, ad
     Build an Almosafer search URL for the given city/dates/occupancy.
     `city` should be the Arabic (or local) display name Almosafer expects in
     the path, e.g. "جدة" for Jeddah — the same value shown in their own
-    search bar. `place_id` comes from Almosafer's place-autocomplete API.
+    search bar. `place_id` is resolved automatically via get_place_id()
+    unless the caller already has one.
     """
     checkin_str = checkin.strftime("%d-%m-%Y")
     checkout_str = checkout.strftime("%d-%m-%Y")
@@ -206,7 +208,7 @@ class SearchCapture:
 def parse_args():
     parser = argparse.ArgumentParser(description="Scrape Almosafer hotel listings for chosen city/dates.")
     parser.add_argument("--city", required=True, help='City display name as Almosafer expects it, e.g. "جدة"')
-    parser.add_argument("--place-id", required=True, help="Almosafer placeId for the city (from their autocomplete API)")
+    parser.add_argument("--place-id", default=None, help="Almosafer placeId for the city. Resolved automatically from --city if omitted.")
     parser.add_argument("--checkin", required=True, help="Check-in date, YYYY-MM-DD")
     parser.add_argument("--checkout", required=True, help="Check-out date, YYYY-MM-DD")
     parser.add_argument("--adults", type=int, default=2, help="Number of adults (default: 2)")
@@ -223,10 +225,7 @@ def run_search_attempt(page, capture: SearchCapture, search_url: str, wait_ms: i
     retries don't see stale data from a previous attempt."""
     capture.reset()
 
-    if reload:
-        page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
-    else:
-        page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
+    page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
 
     waited_ms = 0
     step_ms = 1000
@@ -256,6 +255,16 @@ def run_search_attempt(page, capture: SearchCapture, search_url: str, wait_ms: i
     return True
 
 
+def _resolve_place_id(city: str, place_id, headless: bool):
+    """Use the caller-supplied placeId if given, otherwise resolve it
+    automatically from the city name."""
+    if place_id:
+        return place_id
+
+    print(f"[PLACE ID] No place_id supplied — resolving one for '{city}' automatically...")
+    return get_place_id(city, headless=headless)
+
+
 def main():
     args = parse_args()
 
@@ -265,7 +274,13 @@ def main():
         print(f"[ERROR] {e}")
         sys.exit(1)
 
-    search_url = build_search_url(args.city, args.place_id, checkin_d, checkout_d, args.adults)
+    try:
+        place_id = _resolve_place_id(args.city, args.place_id, args.headless)
+    except RuntimeError as e:
+        print(f"[ERROR] {e}")
+        sys.exit(1)
+
+    search_url = build_search_url(args.city, place_id, checkin_d, checkout_d, args.adults)
     capture = SearchCapture()
 
     with sync_playwright() as p:
@@ -315,60 +330,39 @@ def main():
         finally:
             browser.close()
 
+
 def run_almosafer(
     city: str,
-    place_id: str,
     checkin: str,
     checkout: str,
+    place_id: str = None,
     adults: int = 2,
     wait_ms: int = 30000,
     retries: int = 2,
     headless: bool = True
 ):
-    
     """
     Run Almosafer crawler from the API/service layer.
+    `place_id` is optional — if omitted, it's resolved automatically from
+    `city` via get_place_id().
     Returns the number of hotels saved.
     """
 
-    # Validate dates
-    checkin_d, checkout_d = validate_date_range(
-        checkin,
-        checkout
-    )
+    checkin_d, checkout_d = validate_date_range(checkin, checkout)
 
-    # Build search URL
-    search_url = build_search_url(
-        city,
-        place_id,
-        checkin_d,
-        checkout_d,
-        adults
-    )
+    resolved_place_id = _resolve_place_id(city, place_id, headless)
+
+    search_url = build_search_url(city, resolved_place_id, checkin_d, checkout_d, adults)
 
     capture = SearchCapture()
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
-
-        context = browser.new_context(
-            viewport={
-                "width": 1280,
-                "height": 800
-            }
-        )
-
+        context = browser.new_context(viewport={"width": 1280, "height": 800})
         page = context.new_page()
 
-        page.on(
-            "response",
-            capture.capture_response
-        )
-
-        page.on(
-            "request",
-            capture.capture_request
-        )
+        page.on("response", capture.capture_response)
+        page.on("request", capture.capture_request)
 
         try:
             print("[OPENING SEARCH PAGE]")
@@ -378,34 +372,16 @@ def run_almosafer(
             total_attempts = retries + 1
 
             for attempt in range(1, total_attempts + 1):
-
-                print(
-                    f"\n[ATTEMPT {attempt}/{total_attempts}]"
-                )
-
-                success = run_search_attempt(
-                    page,
-                    capture,
-                    search_url,
-                    wait_ms,
-                    reload=(attempt > 1)
-                )
-
+                print(f"\n[ATTEMPT {attempt}/{total_attempts}]")
+                success = run_search_attempt(page, capture, search_url, wait_ms, reload=(attempt > 1))
                 if success:
                     break
-
                 if attempt < total_attempts:
-                    print(
-                        "[RETRYING] Reloading search page..."
-                    )
+                    print("[RETRYING] Reloading search page...")
 
             if not success:
-                raise RuntimeError(
-                    f"Almosafer search failed after "
-                    f"{total_attempts} attempt(s)."
-                )
+                raise RuntimeError(f"Almosafer search failed after {total_attempts} attempt(s).")
 
-            # Merge API responses into hotel records
             hotels = merge_hotels(
                 capture.poll_data,
                 capture.summary_data,
@@ -415,30 +391,20 @@ def run_almosafer(
                 adults
             )
 
-            print(
-                f"\nFound {len(hotels)} hotels\n"
-            )
+            print(f"\nFound {len(hotels)} hotels\n")
 
-            # Save hotels to database
-            for i, hotel in enumerate(
-                hotels,
-                start=1
-            ):
+            for i, hotel in enumerate(hotels, start=1):
                 save_hotel_to_db(hotel)
-
                 if i % 25 == 0:
-                    print(
-                        f"Saved {i}/{len(hotels)} hotels..."
-                    )
+                    print(f"Saved {i}/{len(hotels)} hotels...")
 
-            print(
-                f"\nFinished. Total hotels: {len(hotels)}"
-            )
+            print(f"\nFinished. Total hotels: {len(hotels)}")
 
             return len(hotels)
 
         finally:
             browser.close()
+
 
 if __name__ == "__main__":
     main()

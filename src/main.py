@@ -1,11 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.routes.hotels import router as hotel_router
+from src.routes.hotel_routes_async import router as hotel_async_router
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi import Request
 from src.app.base import Base
 from src.app.database import engine
+
+from src.models.crawl_job import CrawlJob  # noqa: F401
 
 Base.metadata.create_all(bind=engine)
 
@@ -29,7 +32,10 @@ app.add_middleware(
 )
 
 # Include Routes
+app.include_router(hotel_async_router)
 app.include_router(hotel_router)
+
+
 @app.get("/")
 def home(request: Request):
     return templates.TemplateResponse(
