@@ -50,7 +50,7 @@ class AlmosaferCrawlRequest(BaseModel):
 @router.get("", response_model=List[HotelResponse])
 def get_hotels(
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100),
+    limit: int = Query(1000, ge=1),
     db: Session = Depends(get_db)
 ):
     """Get all hotels with pagination."""

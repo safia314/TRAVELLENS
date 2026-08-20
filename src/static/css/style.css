@@ -58,6 +58,221 @@ body{
     line-height:1.7;
 }
 
+/* ================= FILTER BAR ================= */
+.filter-bar{
+    width:90%;
+    max-width:1200px;
+    margin:40px auto 0;
+    background:white;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0 5px 18px rgba(0,0,0,.08);
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    align-items:center;
+}
+
+.filter-bar select{
+    flex:1;
+    min-width:150px;
+    padding:10px 12px;
+    border:1px solid #ddd;
+    border-radius:8px;
+    font-size:14px;
+    background:white;
+    cursor:pointer;
+}
+
+.filter-bar input{
+    flex:1;
+    min-width:150px;
+    padding:10px 12px;
+    border:1px solid #ddd;
+    border-radius:8px;
+    font-size:14px;
+}
+
+.filter-bar input[type="number"]{
+    min-width:130px;
+}
+
+.filter-bar button{
+    padding:10px 20px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:14px;
+    font-weight:bold;
+}
+
+.filter-bar #filter-btn{
+    background:#0b5ed7;
+    color:white;
+}
+
+.filter-bar #filter-btn:hover{
+    background:#084298;
+}
+
+.filter-bar #filter-reset-btn{
+    background:#e9ecef;
+    color:#333;
+}
+
+.filter-bar #filter-reset-btn:hover{
+    background:#dcdfe3;
+}
+
+.no-results{
+    grid-column:1/-1;
+    text-align:center;
+    color:#777;
+    padding:40px 0;
+    font-size:16px;
+}
+
+/* ================= COMPARE SECTION ================= */
+.compare-section{
+    width:90%;
+    max-width:1200px;
+    margin:40px auto 0;
+    background:white;
+    padding:25px;
+    border-radius:12px;
+    box-shadow:0 5px 18px rgba(0,0,0,.08);
+}
+
+.compare-section h2{
+    color:#0b5ed7;
+    margin-bottom:6px;
+}
+
+.compare-subtitle{
+    color:#666;
+    font-size:14px;
+    margin-bottom:18px;
+}
+
+.compare-bar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    margin-bottom:20px;
+}
+
+.compare-bar input{
+    flex:1;
+    min-width:150px;
+    padding:10px 12px;
+    border:1px solid #ddd;
+    border-radius:8px;
+    font-size:14px;
+}
+
+.compare-bar button{
+    padding:10px 24px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:14px;
+    font-weight:bold;
+    background:#0b5ed7;
+    color:white;
+}
+
+.compare-bar button:hover{
+    background:#084298;
+}
+
+.compare-summary{
+    color:#555;
+    font-size:14px;
+    margin-bottom:15px;
+}
+
+.compare-card{
+    border:1px solid #eee;
+    border-radius:10px;
+    padding:16px;
+    margin-bottom:14px;
+}
+
+.compare-card-header{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:10px;
+    flex-wrap:wrap;
+}
+
+.compare-card-header h3{
+    color:#0b5ed7;
+    font-size:17px;
+}
+
+.low-confidence-badge{
+    background:#fff3cd;
+    color:#856404;
+    font-size:11px;
+    padding:3px 8px;
+    border-radius:6px;
+}
+
+.price-spread{
+    font-size:13px;
+    color:#777;
+    margin-bottom:10px;
+}
+
+.compare-listings{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+}
+
+.compare-listing{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 14px;
+    border:1px solid #ddd;
+    border-radius:8px;
+    font-size:14px;
+}
+
+.compare-listing.cheapest{
+    border-color:#198754;
+    background:#f0fbf5;
+}
+
+.listing-site{
+    font-weight:bold;
+    text-transform:capitalize;
+}
+
+.listing-price{
+    color:#333;
+}
+
+.cheapest-badge{
+    background:#198754;
+    color:white;
+    font-size:11px;
+    padding:2px 8px;
+    border-radius:6px;
+}
+
+.compare-listing a{
+    color:#0b5ed7;
+    text-decoration:none;
+    font-size:13px;
+}
+
+.compare-listing a:hover{
+    text-decoration:underline;
+}
+
 /* ================= TITLES ================= */
 .section-title{
     width:90%;
@@ -123,6 +338,70 @@ body{
     background:#084298;
 }
 
+/* ================= CARD: CITY / STAY DATES ================= */
+.hotel-city,
+.stay-dates{
+    color:#555;
+    font-size:14px;
+}
+
+/* ================= CARD: PRICE BLOCK ================= */
+.price-block{
+    padding:8px 15px 0;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+}
+
+.current-price{
+    font-size:20px;
+    font-weight:bold;
+    color:#198754;
+}
+
+.original-price{
+    font-size:14px;
+    color:#999;
+    text-decoration:line-through;
+}
+
+.discount-badge{
+    background:#dc3545;
+    color:white;
+    font-size:12px;
+    font-weight:bold;
+    padding:3px 8px;
+    border-radius:6px;
+}
+
+.tax-note{
+    padding:2px 15px 0;
+    font-size:12px;
+    color:#c0392b;
+}
+
+.tax-note.tax-included{
+    color:#198754;
+}
+
+/* ================= CARD: AMENITY BADGES ================= */
+.amenity-list{
+    padding:10px 15px 0;
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+}
+
+.amenity-badge{
+    background:#eef3fc;
+    color:#0b5ed7;
+    font-size:12px;
+    padding:4px 10px;
+    border-radius:12px;
+    border:1px solid #d6e4fb;
+}
+
 /* ================= CHAT ================= */
 .chat-container{
     width:90%;
@@ -178,13 +457,70 @@ body{
     opacity:0.85;
 }
 
-#response{
-    margin-top:20px;
+.chat-messages{
+    max-height:180px;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin-bottom:15px;
+    padding-right:4px;
+}
+
+.chat-bubble{
+    padding:10px 14px;
+    border-radius:12px;
+    font-size:14px;
+    line-height:1.5;
+    max-width:90%;
+    word-wrap:break-word;
+}
+
+.chat-bubble.user{
+    align-self:flex-end;
+    background:#0b5ed7;
+    color:white;
+    border-bottom-right-radius:2px;
+}
+
+.chat-bubble.ai{
+    align-self:flex-start;
     background:#f5f5f5;
-    padding:20px;
-    border-radius:8px;
-    min-height:60px;
-    line-height:1.6;
+    color:#333;
+    border-bottom-left-radius:2px;
+}
+
+.chat-bubble.ai.error{
+    background:#fdecea;
+    color:#c0392b;
+}
+
+.chat-bubble.thinking{
+    display:flex;
+    gap:4px;
+    align-items:center;
+    padding:14px;
+}
+
+.chat-bubble.thinking .dot{
+    width:6px;
+    height:6px;
+    border-radius:50%;
+    background:#999;
+    animation:chat-dot-bounce 1.2s infinite ease-in-out;
+}
+
+.chat-bubble.thinking .dot:nth-child(2){
+    animation-delay:0.2s;
+}
+
+.chat-bubble.thinking .dot:nth-child(3){
+    animation-delay:0.4s;
+}
+
+@keyframes chat-dot-bounce{
+    0%, 60%, 100%{ transform:translateY(0); opacity:0.5; }
+    30%{ transform:translateY(-4px); opacity:1; }
 }
 
 /* ================= FOOTER ================= */
@@ -272,4 +608,3 @@ footer{
     user-select:none;
     border-radius:10px 10px 0 0;
 }
-

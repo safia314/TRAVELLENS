@@ -3,7 +3,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TravelLens</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=3">
+    <link rel="stylesheet" href="/static/css/style.css?v=7">
 </head>
 
 
@@ -12,17 +12,43 @@
         <div class="header-content">
 
             <h1>TravelLens</h1>
-            <p> Find the best hotel deals for your next trip to Jeddah from Booking.com and Almosafer.com ! </p>
+            <p> Find the best hotel deals for your next trip from Booking.com and Almosafer.com ! </p>
 
-            <div class="trip-info">
-                <span>📍 Jeddah</span>
-                <span>📅 14 – 16 August 2026</span>
+            <div class="trip-info" id="trip-info">
+                <span id="trip-cities">📍 Loading cities...</span>
             </div>
 
         </div>
     </header>
 
     <main>
+        <section class="filter-bar">
+            <select id="city-select">
+                <option value="">All cities</option>
+            </select>
+            <input type="text" id="filter-name" placeholder="Hotel name">
+            <input type="number" id="filter-min-rating" placeholder="Min rating" min="0" max="5" step="0.1">
+            <input type="number" id="filter-max-price" placeholder="Max price" min="0">
+            <input type="date" id="filter-checkin" title="Check-in">
+            <input type="date" id="filter-checkout" title="Check-out">
+            <button id="filter-btn">Search</button>
+            <button id="filter-reset-btn" type="button">Reset</button>
+        </section>
+
+        <section class="compare-section">
+            <h2>Compare Prices Across Sites</h2>
+            <p class="compare-subtitle">Compare the same hotel's price on Booking.com vs Almosafer for a given city and dates.</p>
+
+            <div class="compare-bar">
+                <input type="text" id="compare-city" placeholder="City (e.g. Jeddah)" value="Jeddah">
+                <input type="date" id="compare-checkin" title="Check-in">
+                <input type="date" id="compare-checkout" title="Check-out">
+                <button id="compare-btn">Compare</button>
+            </div>
+
+            <div id="compare-results"></div>
+        </section>
+
         <section class="section-title">
             <h2>Available Hotels</h2>
         </section>
@@ -42,14 +68,14 @@
     <div class="chat-body">
 
         <p class="chat-subtitle"> Ask anything about the available hotels </p>
+        <div id="chat-messages" class="chat-messages"></div>
         <textarea id="prompt" placeholder="Example: Which hotel has the highest rating?"></textarea>
         <button id="chat-btn">Ask AI</button>
-        <div id="response"></div>
         
     </div>
  </section>
 
     <footer><p> TravelLens </p></footer>
-    <script src="/static/js/app.js?v=3"></script>
+    <script src="/static/js/app.js?v=7"></script>
 </body>
 </html>

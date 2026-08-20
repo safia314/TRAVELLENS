@@ -1,47 +1,60 @@
-version: "3.9"
-
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: travellens-db
-    restart: always
-
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: travellens
-
-    ports:
-      - "3307:3306"
-
-    volumes:
-      - mysql_data:/var/lib/mysql
-
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+
     container_name: travellens-app
 
     depends_on:
       mysql:
         condition: service_healthy
 
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+
     ports:
       - "8000:8000"
 
-    environment:
-      DB_USER: root
-      DB_PASSWORD: root
-      DB_HOST: mysql
-      DB_NAME: travellens
-
     volumes:
       - chroma_data:/app/chroma_db
+      - ./tests:/app/tests
+      - ./pytest.ini:/app/pytest.ini
+
+  mysql:
+    image: mysql:8.0
+    container_name: travellens-db
+
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-p${DB_ROOT_PASSWORD}"
+        ]
+      timeout: 5s
+      interval: 5s
+      retries: 20
+
+    ports:
+      - "3307:3306"
+
+    restart: always
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
 
 volumes:
-  mysql_data:
   chroma_data:
+  mysql_data:

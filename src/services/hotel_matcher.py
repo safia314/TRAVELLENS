@@ -95,23 +95,20 @@ def _similarity(name_a: str, name_b: str) -> float:
     tokens_a = _meaningful_tokens(name_a)
     tokens_b = _meaningful_tokens(name_b)
 
-    # Character-ratio alone is fooled by a long shared brand/prefix even
-    # when the distinguishing words (branch, district, qualifier) don't
-    # overlap at all — e.g. "Royal Palace Hotel - Jaber" vs "Royal Palace
-    # Hotel - Al Olaya" score ~0.72 on ratio alone despite being different
-    # branches. Blending in token Jaccard (how MUCH of the word set is
-    # shared, not just whether any word is shared) penalizes that case
-    # while still tolerating real-world noise like typos or transliteration
-    # ("Al Malaz" vs "AI Malaz") that mostly hits ratio, not token identity.
-    if tokens_a and tokens_b:
-        jaccard = _token_jaccard(tokens_a, tokens_b)
-        if jaccard == 0.0:
-            # No meaningful words in common at all — not the same hotel,
-            # regardless of how similar the raw strings look.
-            return 0.0
-        return (seq_ratio + jaccard) / 2
+    # If there are no meaningful tokens to compare, we cannot
+    # confidently identify the hotels from character similarity alone.
+    if not tokens_a or not tokens_b:
+        return 0.0
 
-    return seq_ratio
+    jaccard = _token_jaccard(tokens_a, tokens_b)
+
+    # No meaningful words in common -> definitely different hotels.
+    if jaccard == 0.0:
+        return 0.0
+
+    return (seq_ratio + jaccard) / 2
+
+    
 
 
 @dataclass
@@ -190,14 +187,13 @@ def match_hotels(
 
         still_remaining = []
         for candidate in remaining:
-            if candidate.website == anchor.website:
-                # Don't match two listings from the same site to each
-                # other — duplicates within one site are a data-quality
-                # issue for the crawler, not a cross-site match.
+            # A match can contain only one listing from each website.
+            if candidate.website in {hotel.website for hotel in group}:
                 still_remaining.append(candidate)
                 continue
 
             score = _similarity(anchor.name, candidate.name)
+
             if score >= MATCH_THRESHOLD:
                 group.append(candidate)
                 best_pairwise_scores.append(score)

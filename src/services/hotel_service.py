@@ -9,7 +9,7 @@ from src.schemas.hotel import HotelCreate, HotelUpdate
 class HotelService:
 
     @staticmethod
-    def get_all_hotels(db: Session, skip: int = 0, limit: int = 100) -> List[Hotel]:
+    def get_all_hotels(db: Session, skip: int = 0, limit: int = 1000) -> List[Hotel]:
         """Fetch all hotels with pagination"""
         return db.query(Hotel).offset(skip).limit(limit).all()
 

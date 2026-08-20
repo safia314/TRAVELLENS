@@ -1,0 +1,10 @@
+
+CREATE USER IF NOT EXISTS 'travellens_app'@'%' IDENTIFIED BY '';
+
+
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES
+    ON travellens.* TO 'travellens_app'@'%';
+
+
+
+FLUSH PRIVILEGES;
