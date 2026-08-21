@@ -7,6 +7,7 @@ from src.app.database import get_db
 from src.app.job_queue import submit_job, get_job
 from src.services.crawler_service import crawl_booking, crawl_almosafer
 from src.services.hotel_matcher import match_hotels
+from src.services.city_normalizer import normalize_city
 from src.schemas.crawl_requests import (
     BookingCrawlRequest,
     AlmosaferCrawlRequest,
@@ -63,7 +64,7 @@ def get_job_status(job_id: str):
 
 @router.get("/compare", response_model=CompareResponse)
 def compare_hotels(
-    city: str = Query(..., description="City as stored on the Hotel rows (must match crawled value exactly)"),
+    city: str = Query(..., description="City name — either spelling/language works (e.g. 'Jeddah' or 'جدة') as long as it's a known alias in city_normalizer.py"),
     check_in: date_cls = Query(...),
     check_out: date_cls = Query(...),
     db: Session = Depends(get_db),
@@ -73,11 +74,18 @@ def compare_hotels(
     by fuzzy name match across sites (booking.com vs almosafer) for the
     given city/dates and returns each group with a per-site price listing.
 
+    The `city` value is normalized the same way the crawlers normalize it
+    before storing, so passing "Jeddah" or "جدة" here both resolve to
+    whatever canonical form got stored — see
+    src/services/city_normalizer.py for the alias table.
+
     This reads from already-crawled data — it doesn't trigger a crawl.
     Run /crawl/booking/async and /crawl/almosafer/async first (or wait for
     both jobs to complete) so there's something to compare.
     """
-    matches = match_hotels(db, city=city, check_in=check_in, check_out=check_out)
+    canonical_city = normalize_city(city)
+
+    matches = match_hotels(db, city=canonical_city, check_in=check_in, check_out=check_out)
 
     results = []
     matched_across_sites = 0
@@ -102,7 +110,7 @@ def compare_hotels(
         ))
 
     return CompareResponse(
-        city=city,
+        city=canonical_city,
         check_in=check_in,
         check_out=check_out,
         total_matches=len(results),

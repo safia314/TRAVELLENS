@@ -13,6 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from src.app.database import SessionLocal
 from src.models.hotel import Hotel
+from src.services.city_normalizer import normalize_city
 
 
 # --------------------------------------------------------------------------
@@ -78,9 +79,6 @@ def validate_date_range(checkin: str, checkout: str):
 
     if checkin_d < date.today():
         raise ValueError(f"checkin ({checkin}) is in the past")
-    if checkout_d <= checkin_d:
-        raise ValueError(f"checkout ({checkout}) must be after checkin ({checkin})")
-
     if checkout_d <= checkin_d:
         raise ValueError(f"checkout ({checkout}) must be after checkin ({checkin})")
 
@@ -217,7 +215,10 @@ def scrape_hotel_page(page, url: str, city: str, checkin: date, checkout: date, 
         "website": "booking.com",
         "hotel_url": url,
         "image_url": image_url,
-        "city": city,
+        # Store the canonical form (e.g. "جدة" -> "Jeddah") so this matches
+        # up with Almosafer rows for the same city under a different
+        # spelling/language during cross-site comparison.
+        "city": normalize_city(city),
         "check_in": checkin,
         "check_out": checkout,
         "adults": adults,

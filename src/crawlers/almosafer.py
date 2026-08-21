@@ -12,6 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 from src.app.database import SessionLocal
 from src.models.hotel import Hotel
 from src.crawlers.almosafer_places import get_place_id
+from src.services.city_normalizer import normalize_city
 
 
 # Configuration
@@ -64,7 +65,7 @@ def save_hotel_to_db(data: dict):
 
             for key, value in data.items():
 
-                
+
                 if key == "amenities" and not value:
                     continue
 
@@ -144,7 +145,7 @@ def extract_hotel_amenities(
 
             return []
 
-       
+
 
         category_positions = []
 
@@ -434,6 +435,14 @@ def merge_hotels(
         "SAR"
     )
 
+    # Store the canonical form of the city (e.g. "جدة" -> "Jeddah") so
+    # hotels crawled from different sites under different language/
+    # spelling variants of the same city still match on Hotel.city
+    # equality in match_hotels(). The raw `city` value is still used for
+    # the actual Almosafer search URL elsewhere — this only affects what
+    # gets stored.
+    canonical_city = normalize_city(city)
+
     # Limit the number of hotels processed.
     search_results = price_data[
         "searchResults"
@@ -506,7 +515,7 @@ def merge_hotels(
 
             "image_url": image_url,
 
-            "city": city,
+            "city": canonical_city,
 
             "check_in": checkin,
 
@@ -681,9 +690,9 @@ class SearchCapture:
 
                 return
 
-            
+
             # Search polling API.
-           
+
 
             if (
                 "/api/enigma/search/poll/"
@@ -727,9 +736,9 @@ class SearchCapture:
 
                 return
 
-            
+
             # Hotel summaries API.
-            
+
 
             if (
                 "/api/enigma/v2/content/"
@@ -1016,9 +1025,9 @@ def main():
 
     args = parse_args()
 
-    
+
     # Validate dates.
-    
+
 
     try:
 
@@ -1037,9 +1046,9 @@ def main():
 
         sys.exit(1)
 
-    
+
     # Resolve place ID.
-    
+
 
     try:
 
@@ -1057,9 +1066,9 @@ def main():
 
         sys.exit(1)
 
-    
+
     # Build search URL.
-    
+
 
     search_url = build_search_url(
         args.city,
@@ -1071,9 +1080,9 @@ def main():
 
     capture = SearchCapture()
 
-    
+
     # Start Playwright for the search itself.
-    
+
 
     with sync_playwright() as p:
 
@@ -1160,10 +1169,10 @@ def main():
 
                 sys.exit(1)
 
-            
+
             # Merge search results.
             # MAX_HOTELS limits this to 100.
-            
+
 
             hotels = merge_hotels(
                 capture.poll_data,
@@ -1179,20 +1188,20 @@ def main():
                 f"{len(hotels)} hotels\n"
             )
 
-            
+
             # Extract amenities in parallel.
             #
             # Only 5 detail pages are open at the same time.
-            
+
 
             enrich_hotels_with_amenities(
                 hotels,
                 max_workers=MAX_AMENITY_WORKERS
             )
 
-            
+
             # Save hotels.
-            
+
 
             for i, hotel in enumerate(
                 hotels,
@@ -1240,9 +1249,9 @@ def run_almosafer(
     Returns the number of hotels saved.
     """
 
-    
+
     # Validate dates.
-    
+
 
     checkin_d, checkout_d = (
         validate_date_range(
@@ -1251,9 +1260,9 @@ def run_almosafer(
         )
     )
 
-    
+
     # Resolve place ID automatically if needed.
-    
+
 
     resolved_place_id = (
         _resolve_place_id(
@@ -1263,9 +1272,9 @@ def run_almosafer(
         )
     )
 
-    
+
     # Build search URL.
-    
+
 
     search_url = build_search_url(
         city,
@@ -1277,9 +1286,9 @@ def run_almosafer(
 
     capture = SearchCapture()
 
-    
+
     # Search browser.
-    
+
 
     with sync_playwright() as p:
 
@@ -1364,9 +1373,9 @@ def run_almosafer(
                     "attempt(s)."
                 )
 
-            
+
             # Merge search results.
-            
+
 
             hotels = merge_hotels(
                 capture.poll_data,
@@ -1382,18 +1391,18 @@ def run_almosafer(
                 f"{len(hotels)} hotels\n"
             )
 
-            
+
             # Extract amenities using 5 workers.
-            
+
 
             enrich_hotels_with_amenities(
                 hotels,
                 max_workers=MAX_AMENITY_WORKERS
             )
 
-            
+
             # Save hotels.
-            
+
 
             for i, hotel in enumerate(
                 hotels,
