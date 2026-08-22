@@ -1,7 +1,5 @@
 from src.crawlers.booking import run_booking
 from src.crawlers.almosafer import run_almosafer
-from src.vector_store import index_hotels
-from src.app.database import SessionLocal
 
 
 def crawl_booking(
@@ -13,8 +11,13 @@ def crawl_booking(
     max_links: int = 20,
     headless: bool = True
 ):
-
-    count = run_booking(
+    """
+    Chroma re-indexing now happens inside run_booking() itself, right
+    after hotels are saved — so it covers CLI-triggered crawls too, not
+    just ones started through this API path. Nothing to do here beyond
+    forwarding the call.
+    """
+    return run_booking(
         city=city,
         checkin=checkin,
         checkout=checkout,
@@ -23,17 +26,6 @@ def crawl_booking(
         max_links=max_links,
         headless=headless
     )
-
-    # Index MySQL hotels into ChromaDB
-    db = SessionLocal()
-
-    try:
-        indexed_count = index_hotels(db)
-        print(f"[CHROMA] Indexed {indexed_count} hotels")
-    finally:
-        db.close()
-
-    return count
 
 
 def crawl_almosafer(
@@ -48,10 +40,11 @@ def crawl_almosafer(
 ):
     """
     place_id is optional — if omitted, run_almosafer resolves it
-    automatically from city via get_place_id().
+    automatically from city via get_place_id(). Chroma re-indexing now
+    happens inside run_almosafer() itself; see crawl_booking()'s docstring
+    for why.
     """
-
-    count = run_almosafer(
+    return run_almosafer(
         city=city,
         checkin=checkin,
         checkout=checkout,
@@ -61,13 +54,3 @@ def crawl_almosafer(
         retries=retries,
         headless=headless
     )
-
-    db = SessionLocal()
-
-    try:
-        indexed_count = index_hotels(db)
-        print(f"[CHROMA] Indexed {indexed_count} hotels")
-    finally:
-        db.close()
-
-    return count

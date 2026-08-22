@@ -5,6 +5,7 @@ import sys
 from datetime import datetime, date
 from pathlib import Path
 from urllib.parse import urlparse, urlencode, urlunparse, parse_qsl
+from src.vector_store import index_hotels
 
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
@@ -473,6 +474,15 @@ def _run_crawl(city: str, checkin_d: date, checkout_d: date, adults: int, rooms:
                     saved_count += 1
                 except Exception as e:
                     print(f"[ERROR] Failed to scrape hotel {link}: {e}")
+            print("\n[INDEXING] Indexing hotels into ChromaDB...")
+
+            db = SessionLocal()
+
+            try:
+                indexed_count = index_hotels(db)
+                print(f"[INDEXING] Indexed {indexed_count} hotels into ChromaDB.")
+            finally:
+                db.close()
         finally:
             browser.close()
 

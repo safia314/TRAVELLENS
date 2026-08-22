@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from playwright.sync_api import sync_playwright
+from src.vector_store import index_hotels
 
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
@@ -1219,6 +1220,16 @@ def main():
                         f"{len(hotels)} hotels..."
                     )
 
+
+            print("\n[INDEXING] Indexing hotels into ChromaDB...")
+
+            db = SessionLocal()
+
+            try:
+                indexed_count = index_hotels(db)
+                print(f"[INDEXING] Indexed {indexed_count} hotels into ChromaDB.")
+            finally:
+                db.close()
             print(
                 f"\nFinished. "
                 f"Total hotels: {len(hotels)}"

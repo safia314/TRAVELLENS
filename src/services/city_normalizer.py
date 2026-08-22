@@ -10,7 +10,7 @@ passes through unchanged (stripped) — add it below once you crawl it,
 rather than guessing a mapping.
 """
 
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 
 # Canonical name -> known aliases (any language/spelling variant seen in
 # practice, lowercase). Extend this as new cities get crawled.
@@ -18,7 +18,7 @@ _CITY_ALIASES: Dict[str, Set[str]] = {
     "Jeddah": {"jeddah", "جدة"},
     "Riyadh": {"riyadh", "الرياض"},
     "Dammam": {"dammam", "الدمام"},
-    "Mecca": {"mecca", "makkah", "مكة", "مكة المكرمة"},
+    "Makkah": {"mecca", "makkah", "مكة", "مكة المكرمة"},
     "Medina": {"medina", "al madinah", "المدينة", "المدينة المنورة"},
     "Khobar": {"khobar", "al khobar", "الخبر"},
     "Abha": {"abha", "أبها"},
@@ -42,3 +42,24 @@ def normalize_city(raw: str) -> str:
 
     key = raw.strip().lower()
     return _ALIAS_TO_CANONICAL.get(key, raw.strip())
+
+
+def detect_city_in_text(text: str) -> Optional[str]:
+    """
+    Look for a known city name/alias mentioned anywhere inside a longer
+    piece of text (e.g. a chat question like "cheapest hotel in Jeddah"),
+    as opposed to normalize_city() which expects the city as the whole
+    input. Returns the canonical name of the first match, or None.
+
+    Only matches cities already in _CITY_ALIASES — this is a lookup
+    against a maintained list, not general place-name extraction, so a
+    city crawled but not yet added here won't be detected.
+    """
+    if not text:
+        return None
+
+    lowered = text.lower()
+    for alias, canonical in _ALIAS_TO_CANONICAL.items():
+        if alias in lowered:
+            return canonical
+    return None
